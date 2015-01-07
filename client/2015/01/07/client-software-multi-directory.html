@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width initial-scale=1" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+    <title>客户端软件多目录</title>
+    <meta name="description" content="Write an awesome description for your new site here. You can edit this line in _config.yml. It will appear in your document head meta (for Google search results) and in your feed.xml site description.
+">
+
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="canonical" href="http://yourdomain.com/client/2015/01/07/client-software-multi-directory.html">
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Your awesome title</a>
+
+    <nav class="site-nav">
+      <a href="#" class="menu-icon">
+        <svg viewBox="0 0 18 15">
+          <path fill="#424242" d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.031C17.335,0,18,0.665,18,1.484L18,1.484z"/>
+          <path fill="#424242" d="M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0c0-0.82,0.665-1.484,1.484-1.484 h15.031C17.335,6.031,18,6.696,18,7.516L18,7.516z"/>
+          <path fill="#424242" d="M18,13.516C18,14.335,17.335,15,16.516,15H1.484C0.665,15,0,14.335,0,13.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.031C17.335,12.031,18,12.696,18,13.516L18,13.516z"/>
+        </svg>
+      </a>
+
+      <div class="trigger">
+        
+          
+          <a class="page-link" href="/about/">About</a>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      </div>
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <div class="page-content">
+      <div class="wrapper">
+        <div class="post">
+
+  <header class="post-header">
+    <h1 class="post-title">客户端软件多目录</h1>
+    <p class="post-meta">Jan 7, 2015</p>
+  </header>
+
+  <article class="post-content">
+    <h2 id="section">研究背景</h2>
+
+<p>一个复杂的客户端软件可能包含上百个不同功能的动态库，有些动态库需要配置文件，有些动态库会生成日志文件。如果将所有的动态库、配置文件和日志文件都放置到主程序目录下，文件太多就会显的杂乱无章，不易管理，文件名也容易冲突。自然想到的方案就是将产品按照逻辑功能划分到不同子目录下，每个子目录下是一个单独的子产品，从而实现产品程度上的模块化和解耦合，同时对开发、部署（安装、卸载和升级）和销售都会产生一定的便利。下图是我们当前客户端产品的目录结构，每个子产品都是一个单独的目录：</p>
+
+<p><img src="https://bytebucket.org/touxienihao/test/raw/49837a8f547d54e5831dc43c4e43e467c9a357ff/TestLibraryLoad/doc/ESM.png?token=2e94251d2fefa79f6040c484a3499cb32219c92b" alt="ESM DIRECTORY LAYOUT" /></p>
+
+<p>要实现软件分目录，主要就是实现动态链接库的分目录。动态链接库有两种链接方式：显示链接和隐式链接。在不同的操作系统下，不同链接方式的实现各不相同，下面分别进行讨论，并给出相应的分目录解决方案。</p>
+
+<h2 id="section-1">显式链接动态库分目录</h2>
+
+<p>显式链接动态库是指程序可以在运行时控制加载指定的动态库，并且可以在不需要该动态库时将其卸载，动态库的加载和卸载完全由程序自己控制。在不同操作系统下分别有一组 API 实现显式链接：</p>
+
+<blockquote>
+  <p>Windows</p>
+
+  <pre><code>HMODULE LoadLibrary(LPCTSTR lpFileName);
+FARPROC GetProcAddress(HMODULE hModule, LPCSTR lpProcName);
+BOOL FreeLibrary(HMODULE hModule);
+</code></pre>
+
+  <p>Linux</p>
+
+  <pre><code>void *dlopen(const char *filename, int flag);
+void *dlsym(void *handle, const char *symbol);
+char *dlerror(void*);
+int dlclose(void *handle);
+</code></pre>
+</blockquote>
+
+<p>其中 <code>LoadLibrary</code> 和 <code>dlopen</code> 负责动态库的查找和加载，这两个函数的第一个参数 <em>lpFileName</em> 和 <em>filename</em> 都是用来指定动态链接库的路径的，并且都可以指定为绝对路径。所以显式链接动态库要实现分目录很容易，只要在加载动态库的时候传入动态库的绝对路径就行了。</p>
+
+<p><a href="https://bitbucket.org/touxienihao/test/src/1fa5f2e9a586d739bfe8b734aedef6a0f5acf155/TestLibraryLoad?at=develop">TestLibraryLoad</a> 例子中，libmgr.dll 显式链接子目录 libs 下的 liba.dll 和 libb.dll， 使用绝对路径来实现分目录。</p>
+
+<h2 id="section-2">隐式链接动态库分目录</h2>
+
+<p>隐式链接动态库是指程序在启动的时候会自动加载隐式依赖的动态库，如果新加载的动态库又隐式链接其它的动态库，也会被自动查找加载。隐式链接的整个过程由系统自动完成，程序无法自己控制。那要怎样才能实现隐式链接动态库的分目录呢？这要从系统加载进程的步骤说起，下面是一般步骤，不同系统实现略有差异：</p>
+
+<ol>
+  <li>操作系统为进程创建虚拟地址空间</li>
+  <li>加载可执行程序到虚拟地址空间中</li>
+  <li>在加载的可执行程序的文件头中查找隐式依赖的动态库的信息。
+    <ul>
+      <li>Windows 下是在导入表中查找，表中只包含依赖动态库的名称。</li>
+      <li>Linux 下是在 .dynamic 段中查找，段中可以包含绝对路径和相对路径，但是为了可移植性，一般也只包含依赖动态库的名称。</li>
+    </ul>
+  </li>
+  <li>依次根据动态库信息查找动态库文件。</li>
+  <li>将找到的动态库文件加载到进程的虚拟地址空间中，然后重复执行步骤 3，直到所有隐式依赖动态库全部加装成功。</li>
+</ol>
+
+<p>因为隐式依赖的动态库信息中只包含名称，不包含路径，所以需要在磁盘上进行搜索，不同系统下搜索的规则各不相同，要实现隐式链接动态库的分目录，就只有在系统是怎么根据动态库名称查找动态库文件的查找规则上下手了。下面就 Windows 和 Linux 系统分别进行分析。</p>
+
+<h3 id="windows-">Windows 隐式链接动态库分目录</h3>
+
+<blockquote>
+  <p>Windows 动态库查找规则：</p>
+
+  <ol>
+    <li>The directory containing the executable image file.</li>
+    <li>The Windows system directory returned by <code>GetWindowsDirectory</code>.</li>
+    <li>The 16-bit system directory–that is, the System subfolder under the Windows directory.</li>
+    <li>The Windows directory returned by <code>GetSystemDirectory</code>.</li>
+    <li>The process’s current directory.</li>
+    <li>The directorires listed in the PATH environment variable.</li>
+  </ol>
+</blockquote>
+
+<p>前 4 个搜索路径是固定的不能修改，第 5 个只能设置一个当前目录，不能满足多目录的需求，第 6 个正好就是我们要找的了：假如将 DLL 所在的目录添加到 PATH 环境变量中，加载器会先在前 5 个目录下查找，如果查找不到就会进入 PATH 中指定的目录中进行查找，正好找到需要的 DLL，隐式链接分目录成功。</p>
+
+<p>但是如果修改系统环境变量中的 PATH 的话，会影响到系统中的所有进程，不满足需求。实际上每个进程都有一个私有的环境变量块，该变量块在进程启动的时候分配并由当前系统的环境变量进行初始化。最重要的是，即使在运行时修改的话，也不会影响到其它进程。Binggo！ 这正是我们想要的。Windows 提供下面两个 API 来修改进程的环境变量：</p>
+
+<blockquote>
+  <pre><code>DWORD GetEnvironmentVariable(LPCTSTR lpName, LPTSTR lpBuffer, DWORD nSize);
+BOOL SetEnvironmentVariable(LPCTSTR lpName, LPCTSTR lpValue);
+</code></pre>
+</blockquote>
+
+<p>另外，主进程启动的时候也会隐式链接一些 DLL，这个时候我们还没有机会修改进程的环境变量。如果想让这些 DLL 也分目录，可以将程序分成两部分：一部分是一个 exe 的壳程序，仅仅负责设置进程的 PATH 环境变量和显式加载主功能 DLL;另一部分是主功能 DLL，程序的主要功能都挪到这里，包含原先隐式链接的 DLL。通过这种方式，主功能 DLL 在加载隐式链接的 DLL 之前，exe 壳程序已经将分目录添加到 PATH 环境变量里面了，隐式链接就能成功，从而实现分目录了。</p>
+
+<p><a href="https://bitbucket.org/touxienihao/test/src/1fa5f2e9a586d739bfe8b734aedef6a0f5acf155/TestLibraryLoad?at=develop">TestLoadLibrary</a> 例子中：libmgr.dll 负责将 comm 目录添加到进程 PATH 环境变量，并且使用绝对路径显式链接子目录 libs 下的 liba.dll 和 libb.dll。liba.dll 和 libb.dll 分别隐式链接 comm 目录下的 libc.dll，由于 libmgr.dll 已将 comm 目录添加到了进程 PATH 环境变量中，所以隐式链接 libc.dll 时也能成功。</p>
+
+<p>那到这里问题是否完全搞定了呢？ No, 真正的高潮才刚刚开始！</p>
+
+<h4 id="vc-">VC 运行库</h4>
+
+<p>我们知道，使用 MD 或者 MDd 方式编译的 EXE 和 DLL 都会隐式依赖 VC 运行库。通常情况下 VC 运行库可以按照下面两种方式进行部署：</p>
+
+<ol>
+  <li>安装 VC 运行库安装包。</li>
+  <li>拷贝一份 VC 运行库到程序目录。</li>
+</ol>
+
+<p>做过安装部署的同学可能知道，方案 1 并不像看上去的那么美：首先VC 运行库安装程序可能运行出错，错误处理比较麻烦；其次 VC 运行库安装程序可能会被其它标准的安装程序卡住，因为系统同一时间只允许一个标准的安装程序运行。方案 2 相对好一点，直接拷贝文件，没有了前面的困扰。</p>
+
+<p>但是如果动态库进行分目录的话，情况就不一样了。方案 1 天生支持动态库分目录。方案 2 需要考虑将 VC 运行库放置到哪个目录下呢？自然想到的就是把 VC 运行库放到公共的目录下，然后将公共目录路径加到进程 PATH 环境变量里，让所有依赖它的动态库都去公共目录下隐式链接 VC 运行库。但是使用这种技术真的能解决 VC 运行库分目录问题？ NO ，因为Windows 为了解决动态库版本冲突问题，提供了下面的技术：</p>
+
+<blockquote>
+  <p>Isolated applications and Side-by-side Assemblies is a Microsoft Windows solution that reduces versioning conflicts in Windows-client applications.</p>
+</blockquote>
+
+<p>具体技术细节可产考 <a href="http://msdn.microsoft.com/en-us/library/windows/desktop/dd408052(v=vs.85).aspx">MSDN</a>，我们只需要知道：如果程序使用了该技术，动态库的查找规则就不是前面描述的传统查找规则了，而是变成了 <a href="http://msdn.microsoft.com/en-us/library/windows/desktop/aa374224(v=vs.85).aspx">Assembly Searching Sequence</a>，并且查找顺序在 XP 下无法修改，Window 7 后才提供了 <a href="http://msdn.microsoft.com/en-us/library/windows/desktop/aa374182%28v=vs.85%29.aspx">probing privatePath</a> 用来指定查找目录，要支持 XP 的话也没法使用。VC 编译器链接 VC 运行库时默认使用这个技术来解决版本冲突问题，导致查找 VC 运行库时不查找 PATH 环境变量指定的目录了，结果就找不到前面放到公共目录下的 VC 运行库。有两种方案解决这个问题：1. 通过每个子目录下都放置一份 VC 运行库的拷贝解决（Private Assemblies 方式）；2. 就是前面提到的通过安装 VC 运行库安装包解决（Shared Assemblies 方式）。两种方式都有不尽如人意的地方，我们需要继续探索！</p>
+
+<p>了解了上述原理，我们发现有另外一种解决方案：编译器默认对 VC 运行库使用版本冲突解决技术(表象就是 DLL 和 EXE 的资源中包含 Manifest 信息)，如果禁用该技术，VC 运行库的查找过程就会按照前面正常 DLL 的查找顺序进行了。实验过程中发现：如果 exe 壳程序也禁用该技术，程序会崩溃，原因是 VC 运行库在初始化的时候会去检查自己是否通过 Manifest 加载的，判断不是，就会出错。所以最终的方案是：</p>
+
+<ol>
+  <li>拷贝一份 VC 运行库放置到 exe 壳程序所在目录下</li>
+  <li>exe 壳程序链接 VC 运行库时使用版本冲突解决方案</li>
+  <li>其它所有 DLL 链接 VC 运行库时禁用版本冲突解决方案</li>
+</ol>
+
+<p>这样 exe 壳程序启动时，由于链接 VC 运行库时使用了版本冲突解决方案，所以会根据资源中的 Manifest 加载本目录下相应的 VC 运行库。其它 DLL 由于链接 VC 运行库时禁用了版本冲突解决方案，所以会使用传统的 DLL 查找方案，由于加载器会跟踪已加载的 DLL，这时发现 VC 运行库已经加载，就不会在磁盘中进行查找了，直接返回链接成功。</p>
+
+<p><a href="https://bitbucket.org/touxienihao/test/src/1fa5f2e9a586d739bfe8b734aedef6a0f5acf155/TestLibraryLoad?at=develop">TestLibraryLoad</a> 例子中，libexe.exe 的链接属性 Generate Manifest 为 <strong>YES</strong>，其它所有 DLL 的链接属性 Generate Manifest 为 <strong>NO</strong>，VC 运行库与 libexe.exe 同目录。</p>
+
+<p><img src="https://bytebucket.org/touxienihao/test/raw/5583049a8251df3c89df795cc8f4d5722316f6f3/TestLibraryLoad/doc/Manifest.png?token=d7ef5b9a216641671ec7eeafb08ab8a9fd1ec4ad" alt="Manifest" /></p>
+
+<h3 id="linux-">Linux 隐式链接动态库分目录</h3>
+
+<blockquote>
+  <p>Linux 下动态库查找规则</p>
+
+  <ol>
+    <li>(ELF only) If the executable file for the calling program contains a DT_RPATH tag, and does not contain a DT_RUNPATH tag, then directories listed in the DT_RPATH tag are searched.</li>
+    <li>If, at the time that the program was started, the environment variable LD_LIBRARY_PATH was defined to contain a colon-separated list of directories, then these are searched. (As a security measure this variable is ignored for set-user-ID and set-group-ID programs.)</li>
+    <li>(ELF only) If the executable file for the calling program contains a DT_RUNPATH tag, then the directories listed in that tag are searched.</li>
+    <li>The cache file /etc/ld.so.cache (maintained by ldconfig) is checked to see whether it contains an entry for filename.</li>
+    <li>The directories /lib and /usr/lib are searched (in that order).</li>
+  </ol>
+</blockquote>
+
+<p>1 和 3 的 <code>DT_RPATH</code> <code>DT_RUNPATH</code> 都需要在链接时指定，不够灵活，暂不考虑。4 需要动态库支持 so-name，5 是固定目录，都不适用。2 说明在程序启动的时候会搜索 LD_LIBRARY_PATH 环境变量中的目录，是不是很眼熟，与 Windows 下搜索 PATH 环境变量类似。</p>
+
+<p>不幸的是，在 Linux 系统下，程序在执行第一条指令之前，加载器会读取 LD_LIBRARY_PATH 环境变量，并且缓存起来，后面进程在搜索动态库的时候都是使用的这个保存起来的值。由于程序一启动这个值就会被缓存，导致我们完全没有机会进行修改，所以 Windows 下的修改环境变量的方法在 Linux 下不可用。现在需要解决的问题是：怎样在进程执行前设置好环境变量 LD_LIBRARY_PATH 的值，并且不影响系统中的其它进程？</p>
+
+<p>我们知道，进程启动之前会缓存 LD_LIBRARY_PATH 环境变量，后续对该变量的修改不会影响到本进程，但是如果这时创建子进程的话，子进程会继承父进程的环境变量，也就继承了修改后的 LD_LIBRARY_PATH 环境变量，通过这种方式，子进程就能实现隐式链接动态库分目录了。</p>
+
+<p>具体的实现方式有两种：1. 使用 shell 脚本包装可执行程序：在调用可执行程序之前，通过 export 设置本 shell 的 LD_LIBRARY_PATH 环境变量，chrome 浏览器使用这种方式。2. 使用父进程包装可执行程序：在父进程中通过 <code>getenv</code> 和 <code>putenv</code> 设置 LD_LIBRARY_PATH 环境变量，然后通过 execve 执行子进程，Java使用类似的方式 。两种方法都可以在进程执行前设置好 LD_LIBRARY_PATH 环境变量，实现隐式链接动态库分目录。</p>
+
+<p><a href="https://bitbucket.org/touxienihao/test/src/1fa5f2e9a586d739bfe8b734aedef6a0f5acf155/TestLibraryLoad?at=develop">TestLibraryLoad</a> 中 Debug/libexe.sh 使用脚本方式包装，relibexe 使用父进程方式包装。</p>
+
+<blockquote>
+  <p>libexe.sh</p>
+</blockquote>
+
+<pre><code>#!/bin/sh
+
+# libexe launcher
+
+RUNDIR=$(cd `dirname $0`; pwd)
+LIBDIR=$RUNDIR/comm
+
+if [ "Z$LD_LIBRARY_PATH" != Z ] ; then
+  LD_LIBRARY_PATH=$LIBDIR:$LD_LIBRARY_PATH
+else
+  LD_LIBRARY_PATH=$LIBDIR
+fi
+
+export LD_LIBRARY_PATH
+
+$RUNDIR/libexe
+
+exit 0
+</code></pre>
+
+<blockquote>
+  <p>relibexe.cpp</p>
+</blockquote>
+
+<div class="highlight"><pre><code class="language-cpp" data-lang="cpp"><span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">strLDEnv</span><span class="p">;</span>
+    <span class="kt">char</span><span class="o">*</span> <span class="n">pLDEnv</span> <span class="o">=</span> <span class="n">getenv</span><span class="p">(</span><span class="s">"LD_LIBRARY_PATH"</span><span class="p">);</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">pLDEnv</span><span class="p">)</span>
+    <span class="p">{</span>
+        <span class="n">strLDEnv</span> <span class="o">=</span> <span class="n">pLDEnv</span><span class="p">;</span>
+        <span class="n">strLDEnv</span> <span class="o">+=</span> <span class="s">":"</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="n">strLDEnv</span> <span class="o">+=</span> <span class="n">GetRunPath</span><span class="p">();</span>
+    <span class="n">strLDEnv</span> <span class="o">+=</span> <span class="s">"comm"</span><span class="p">;</span>
+    <span class="n">strLDEnv</span> <span class="o">=</span> <span class="s">"LD_LIBRARY_PATH="</span> <span class="o">+</span> <span class="n">strLDEnv</span><span class="p">;</span>
+    <span class="kt">char</span><span class="o">*</span> <span class="n">pData</span> <span class="o">=</span> <span class="p">(</span><span class="kt">char</span><span class="o">*</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span><span class="n">strLDEnv</span><span class="p">.</span><span class="n">size</span><span class="p">()</span> <span class="o">+</span> <span class="mi">1</span><span class="p">);</span>
+    <span class="n">strcpy</span><span class="p">(</span><span class="n">pData</span><span class="p">,</span> <span class="n">strLDEnv</span><span class="p">.</span><span class="n">c_str</span><span class="p">());</span> 
+    <span class="n">pData</span><span class="p">[</span><span class="n">strLDEnv</span><span class="p">.</span><span class="n">size</span><span class="p">()]</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="n">putenv</span><span class="p">(</span><span class="n">pData</span><span class="p">);</span>
+    <span class="c1">// std::cout &lt;&lt; pData &lt;&lt; std::endl;
+</span>
+    <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">strLibExe</span> <span class="o">=</span> <span class="n">GetRunPath</span><span class="p">()</span> <span class="o">+</span> <span class="s">"libexe"</span><span class="p">;</span>
+    <span class="n">pid_t</span> <span class="n">pid</span> <span class="o">=</span> <span class="n">fork</span><span class="p">();</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">pid</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">execl</span><span class="p">(</span><span class="n">strLibExe</span><span class="p">.</span><span class="n">c_str</span><span class="p">(),</span> <span class="p">(</span><span class="kt">char</span><span class="o">*</span><span class="p">)</span><span class="mi">0</span><span class="p">);</span></code></pre></div>
+
+
+  </article>
+
+</div>
+
+      </div>
+    </div>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Your awesome title</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col  footer-col-1">
+        <ul class="contact-list">
+          <li>Your awesome title</li>
+          <li><a href="mailto:your-email@domain.com">your-email@domain.com</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-2">
+        <ul class="social-media-list">
+          
+          <li>
+            <a href="https://github.com/jekyll">
+              <span class="icon  icon--github">
+                <svg viewBox="0 0 16 16">
+                  <path fill="#828282" d="M7.999,0.431c-4.285,0-7.76,3.474-7.76,7.761 c0,3.428,2.223,6.337,5.307,7.363c0.388,0.071,0.53-0.168,0.53-0.374c0-0.184-0.007-0.672-0.01-1.32 c-2.159,0.469-2.614-1.04-2.614-1.04c-0.353-0.896-0.862-1.135-0.862-1.135c-0.705-0.481,0.053-0.472,0.053-0.472 c0.779,0.055,1.189,0.8,1.189,0.8c0.692,1.186,1.816,0.843,2.258,0.645c0.071-0.502,0.271-0.843,0.493-1.037 C4.86,11.425,3.049,10.76,3.049,7.786c0-0.847,0.302-1.54,0.799-2.082C3.768,5.507,3.501,4.718,3.924,3.65 c0,0,0.652-0.209,2.134,0.796C6.677,4.273,7.34,4.187,8,4.184c0.659,0.003,1.323,0.089,1.943,0.261 c1.482-1.004,2.132-0.796,2.132-0.796c0.423,1.068,0.157,1.857,0.077,2.054c0.497,0.542,0.798,1.235,0.798,2.082 c0,2.981-1.814,3.637-3.543,3.829c0.279,0.24,0.527,0.713,0.527,1.437c0,1.037-0.01,1.874-0.01,2.129 c0,0.208,0.14,0.449,0.534,0.373c3.081-1.028,5.302-3.935,5.302-7.362C15.76,3.906,12.285,0.431,7.999,0.431z"/>
+                </svg>
+              </span>
+
+              <span class="username">jekyll</span>
+            </a>
+          </li>
+          
+
+          
+          <li>
+            <a href="https://twitter.com/jekyllrb">
+              <span class="icon  icon--twitter">
+                <svg viewBox="0 0 16 16">
+                  <path fill="#828282" d="M15.969,3.058c-0.586,0.26-1.217,0.436-1.878,0.515c0.675-0.405,1.194-1.045,1.438-1.809
+                  c-0.632,0.375-1.332,0.647-2.076,0.793c-0.596-0.636-1.446-1.033-2.387-1.033c-1.806,0-3.27,1.464-3.27,3.27 c0,0.256,0.029,0.506,0.085,0.745C5.163,5.404,2.753,4.102,1.14,2.124C0.859,2.607,0.698,3.168,0.698,3.767 c0,1.134,0.577,2.135,1.455,2.722C1.616,6.472,1.112,6.325,0.671,6.08c0,0.014,0,0.027,0,0.041c0,1.584,1.127,2.906,2.623,3.206 C3.02,9.402,2.731,9.442,2.433,9.442c-0.211,0-0.416-0.021-0.615-0.059c0.416,1.299,1.624,2.245,3.055,2.271 c-1.119,0.877-2.529,1.4-4.061,1.4c-0.264,0-0.524-0.015-0.78-0.046c1.447,0.928,3.166,1.469,5.013,1.469 c6.015,0,9.304-4.983,9.304-9.304c0-0.142-0.003-0.283-0.009-0.423C14.976,4.29,15.531,3.714,15.969,3.058z"/>
+                </svg>
+              </span>
+
+              <span class="username">jekyllrb</span>
+            </a>
+          </li>
+          
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-3">
+        <p class="text">Write an awesome description for your new site here. You can edit this line in _config.yml. It will appear in your document head meta (for Google search results) and in your feed.xml site description.
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>

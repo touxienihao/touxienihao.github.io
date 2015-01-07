@@ -1,0 +1,467 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Your awesome title</title>
+    <description>Write an awesome description for your new site here. You can edit this line in _config.yml. It will appear in your document head meta (for Google search results) and in your feed.xml site description.
+</description>
+    <link>http://yourdomain.com/</link>
+    <atom:link href="http://yourdomain.com/feed.xml" rel="self" type="application/rss+xml" />
+    <pubDate>Wed, 07 Jan 2015 14:42:05 +0800</pubDate>
+    <lastBuildDate>Wed, 07 Jan 2015 14:42:05 +0800</lastBuildDate>
+    <generator>Jekyll v2.4.0</generator>
+    
+      <item>
+        <title>客户端软件多目录</title>
+        <description>&lt;h2 id=&quot;section&quot;&gt;研究背景&lt;/h2&gt;
+
+&lt;p&gt;一个复杂的客户端软件可能包含上百个不同功能的动态库，有些动态库需要配置文件，有些动态库会生成日志文件。如果将所有的动态库、配置文件和日志文件都放置到主程序目录下，文件太多就会显的杂乱无章，不易管理，文件名也容易冲突。自然想到的方案就是将产品按照逻辑功能划分到不同子目录下，每个子目录下是一个单独的子产品，从而实现产品程度上的模块化和解耦合，同时对开发、部署（安装、卸载和升级）和销售都会产生一定的便利。下图是我们当前客户端产品的目录结构，每个子产品都是一个单独的目录：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://bytebucket.org/touxienihao/test/raw/49837a8f547d54e5831dc43c4e43e467c9a357ff/TestLibraryLoad/doc/ESM.png?token=2e94251d2fefa79f6040c484a3499cb32219c92b&quot; alt=&quot;ESM DIRECTORY LAYOUT&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;要实现软件分目录，主要就是实现动态链接库的分目录。动态链接库有两种链接方式：显示链接和隐式链接。在不同的操作系统下，不同链接方式的实现各不相同，下面分别进行讨论，并给出相应的分目录解决方案。&lt;/p&gt;
+
+&lt;h2 id=&quot;section-1&quot;&gt;显式链接动态库分目录&lt;/h2&gt;
+
+&lt;p&gt;显式链接动态库是指程序可以在运行时控制加载指定的动态库，并且可以在不需要该动态库时将其卸载，动态库的加载和卸载完全由程序自己控制。在不同操作系统下分别有一组 API 实现显式链接：&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;Windows&lt;/p&gt;
+
+  &lt;pre&gt;&lt;code&gt;HMODULE LoadLibrary(LPCTSTR lpFileName);
+FARPROC GetProcAddress(HMODULE hModule, LPCSTR lpProcName);
+BOOL FreeLibrary(HMODULE hModule);
+&lt;/code&gt;&lt;/pre&gt;
+
+  &lt;p&gt;Linux&lt;/p&gt;
+
+  &lt;pre&gt;&lt;code&gt;void *dlopen(const char *filename, int flag);
+void *dlsym(void *handle, const char *symbol);
+char *dlerror(void*);
+int dlclose(void *handle);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;其中 &lt;code&gt;LoadLibrary&lt;/code&gt; 和 &lt;code&gt;dlopen&lt;/code&gt; 负责动态库的查找和加载，这两个函数的第一个参数 &lt;em&gt;lpFileName&lt;/em&gt; 和 &lt;em&gt;filename&lt;/em&gt; 都是用来指定动态链接库的路径的，并且都可以指定为绝对路径。所以显式链接动态库要实现分目录很容易，只要在加载动态库的时候传入动态库的绝对路径就行了。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://bitbucket.org/touxienihao/test/src/1fa5f2e9a586d739bfe8b734aedef6a0f5acf155/TestLibraryLoad?at=develop&quot;&gt;TestLibraryLoad&lt;/a&gt; 例子中，libmgr.dll 显式链接子目录 libs 下的 liba.dll 和 libb.dll， 使用绝对路径来实现分目录。&lt;/p&gt;
+
+&lt;h2 id=&quot;section-2&quot;&gt;隐式链接动态库分目录&lt;/h2&gt;
+
+&lt;p&gt;隐式链接动态库是指程序在启动的时候会自动加载隐式依赖的动态库，如果新加载的动态库又隐式链接其它的动态库，也会被自动查找加载。隐式链接的整个过程由系统自动完成，程序无法自己控制。那要怎样才能实现隐式链接动态库的分目录呢？这要从系统加载进程的步骤说起，下面是一般步骤，不同系统实现略有差异：&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;操作系统为进程创建虚拟地址空间&lt;/li&gt;
+  &lt;li&gt;加载可执行程序到虚拟地址空间中&lt;/li&gt;
+  &lt;li&gt;在加载的可执行程序的文件头中查找隐式依赖的动态库的信息。
+    &lt;ul&gt;
+      &lt;li&gt;Windows 下是在导入表中查找，表中只包含依赖动态库的名称。&lt;/li&gt;
+      &lt;li&gt;Linux 下是在 .dynamic 段中查找，段中可以包含绝对路径和相对路径，但是为了可移植性，一般也只包含依赖动态库的名称。&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;依次根据动态库信息查找动态库文件。&lt;/li&gt;
+  &lt;li&gt;将找到的动态库文件加载到进程的虚拟地址空间中，然后重复执行步骤 3，直到所有隐式依赖动态库全部加装成功。&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;因为隐式依赖的动态库信息中只包含名称，不包含路径，所以需要在磁盘上进行搜索，不同系统下搜索的规则各不相同，要实现隐式链接动态库的分目录，就只有在系统是怎么根据动态库名称查找动态库文件的查找规则上下手了。下面就 Windows 和 Linux 系统分别进行分析。&lt;/p&gt;
+
+&lt;h3 id=&quot;windows-&quot;&gt;Windows 隐式链接动态库分目录&lt;/h3&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;Windows 动态库查找规则：&lt;/p&gt;
+
+  &lt;ol&gt;
+    &lt;li&gt;The directory containing the executable image file.&lt;/li&gt;
+    &lt;li&gt;The Windows system directory returned by &lt;code&gt;GetWindowsDirectory&lt;/code&gt;.&lt;/li&gt;
+    &lt;li&gt;The 16-bit system directory–that is, the System subfolder under the Windows directory.&lt;/li&gt;
+    &lt;li&gt;The Windows directory returned by &lt;code&gt;GetSystemDirectory&lt;/code&gt;.&lt;/li&gt;
+    &lt;li&gt;The process’s current directory.&lt;/li&gt;
+    &lt;li&gt;The directorires listed in the PATH environment variable.&lt;/li&gt;
+  &lt;/ol&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;前 4 个搜索路径是固定的不能修改，第 5 个只能设置一个当前目录，不能满足多目录的需求，第 6 个正好就是我们要找的了：假如将 DLL 所在的目录添加到 PATH 环境变量中，加载器会先在前 5 个目录下查找，如果查找不到就会进入 PATH 中指定的目录中进行查找，正好找到需要的 DLL，隐式链接分目录成功。&lt;/p&gt;
+
+&lt;p&gt;但是如果修改系统环境变量中的 PATH 的话，会影响到系统中的所有进程，不满足需求。实际上每个进程都有一个私有的环境变量块，该变量块在进程启动的时候分配并由当前系统的环境变量进行初始化。最重要的是，即使在运行时修改的话，也不会影响到其它进程。Binggo！ 这正是我们想要的。Windows 提供下面两个 API 来修改进程的环境变量：&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;pre&gt;&lt;code&gt;DWORD GetEnvironmentVariable(LPCTSTR lpName, LPTSTR lpBuffer, DWORD nSize);
+BOOL SetEnvironmentVariable(LPCTSTR lpName, LPCTSTR lpValue);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;另外，主进程启动的时候也会隐式链接一些 DLL，这个时候我们还没有机会修改进程的环境变量。如果想让这些 DLL 也分目录，可以将程序分成两部分：一部分是一个 exe 的壳程序，仅仅负责设置进程的 PATH 环境变量和显式加载主功能 DLL;另一部分是主功能 DLL，程序的主要功能都挪到这里，包含原先隐式链接的 DLL。通过这种方式，主功能 DLL 在加载隐式链接的 DLL 之前，exe 壳程序已经将分目录添加到 PATH 环境变量里面了，隐式链接就能成功，从而实现分目录了。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://bitbucket.org/touxienihao/test/src/1fa5f2e9a586d739bfe8b734aedef6a0f5acf155/TestLibraryLoad?at=develop&quot;&gt;TestLoadLibrary&lt;/a&gt; 例子中：libmgr.dll 负责将 comm 目录添加到进程 PATH 环境变量，并且使用绝对路径显式链接子目录 libs 下的 liba.dll 和 libb.dll。liba.dll 和 libb.dll 分别隐式链接 comm 目录下的 libc.dll，由于 libmgr.dll 已将 comm 目录添加到了进程 PATH 环境变量中，所以隐式链接 libc.dll 时也能成功。&lt;/p&gt;
+
+&lt;p&gt;那到这里问题是否完全搞定了呢？ No, 真正的高潮才刚刚开始！&lt;/p&gt;
+
+&lt;h4 id=&quot;vc-&quot;&gt;VC 运行库&lt;/h4&gt;
+
+&lt;p&gt;我们知道，使用 MD 或者 MDd 方式编译的 EXE 和 DLL 都会隐式依赖 VC 运行库。通常情况下 VC 运行库可以按照下面两种方式进行部署：&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;安装 VC 运行库安装包。&lt;/li&gt;
+  &lt;li&gt;拷贝一份 VC 运行库到程序目录。&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;做过安装部署的同学可能知道，方案 1 并不像看上去的那么美：首先VC 运行库安装程序可能运行出错，错误处理比较麻烦；其次 VC 运行库安装程序可能会被其它标准的安装程序卡住，因为系统同一时间只允许一个标准的安装程序运行。方案 2 相对好一点，直接拷贝文件，没有了前面的困扰。&lt;/p&gt;
+
+&lt;p&gt;但是如果动态库进行分目录的话，情况就不一样了。方案 1 天生支持动态库分目录。方案 2 需要考虑将 VC 运行库放置到哪个目录下呢？自然想到的就是把 VC 运行库放到公共的目录下，然后将公共目录路径加到进程 PATH 环境变量里，让所有依赖它的动态库都去公共目录下隐式链接 VC 运行库。但是使用这种技术真的能解决 VC 运行库分目录问题？ NO ，因为Windows 为了解决动态库版本冲突问题，提供了下面的技术：&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;Isolated applications and Side-by-side Assemblies is a Microsoft Windows solution that reduces versioning conflicts in Windows-client applications.&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;具体技术细节可产考 &lt;a href=&quot;http://msdn.microsoft.com/en-us/library/windows/desktop/dd408052(v=vs.85).aspx&quot;&gt;MSDN&lt;/a&gt;，我们只需要知道：如果程序使用了该技术，动态库的查找规则就不是前面描述的传统查找规则了，而是变成了 &lt;a href=&quot;http://msdn.microsoft.com/en-us/library/windows/desktop/aa374224(v=vs.85).aspx&quot;&gt;Assembly Searching Sequence&lt;/a&gt;，并且查找顺序在 XP 下无法修改，Window 7 后才提供了 &lt;a href=&quot;http://msdn.microsoft.com/en-us/library/windows/desktop/aa374182%28v=vs.85%29.aspx&quot;&gt;probing privatePath&lt;/a&gt; 用来指定查找目录，要支持 XP 的话也没法使用。VC 编译器链接 VC 运行库时默认使用这个技术来解决版本冲突问题，导致查找 VC 运行库时不查找 PATH 环境变量指定的目录了，结果就找不到前面放到公共目录下的 VC 运行库。有两种方案解决这个问题：1. 通过每个子目录下都放置一份 VC 运行库的拷贝解决（Private Assemblies 方式）；2. 就是前面提到的通过安装 VC 运行库安装包解决（Shared Assemblies 方式）。两种方式都有不尽如人意的地方，我们需要继续探索！&lt;/p&gt;
+
+&lt;p&gt;了解了上述原理，我们发现有另外一种解决方案：编译器默认对 VC 运行库使用版本冲突解决技术(表象就是 DLL 和 EXE 的资源中包含 Manifest 信息)，如果禁用该技术，VC 运行库的查找过程就会按照前面正常 DLL 的查找顺序进行了。实验过程中发现：如果 exe 壳程序也禁用该技术，程序会崩溃，原因是 VC 运行库在初始化的时候会去检查自己是否通过 Manifest 加载的，判断不是，就会出错。所以最终的方案是：&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;拷贝一份 VC 运行库放置到 exe 壳程序所在目录下&lt;/li&gt;
+  &lt;li&gt;exe 壳程序链接 VC 运行库时使用版本冲突解决方案&lt;/li&gt;
+  &lt;li&gt;其它所有 DLL 链接 VC 运行库时禁用版本冲突解决方案&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;这样 exe 壳程序启动时，由于链接 VC 运行库时使用了版本冲突解决方案，所以会根据资源中的 Manifest 加载本目录下相应的 VC 运行库。其它 DLL 由于链接 VC 运行库时禁用了版本冲突解决方案，所以会使用传统的 DLL 查找方案，由于加载器会跟踪已加载的 DLL，这时发现 VC 运行库已经加载，就不会在磁盘中进行查找了，直接返回链接成功。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://bitbucket.org/touxienihao/test/src/1fa5f2e9a586d739bfe8b734aedef6a0f5acf155/TestLibraryLoad?at=develop&quot;&gt;TestLibraryLoad&lt;/a&gt; 例子中，libexe.exe 的链接属性 Generate Manifest 为 &lt;strong&gt;YES&lt;/strong&gt;，其它所有 DLL 的链接属性 Generate Manifest 为 &lt;strong&gt;NO&lt;/strong&gt;，VC 运行库与 libexe.exe 同目录。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://bytebucket.org/touxienihao/test/raw/5583049a8251df3c89df795cc8f4d5722316f6f3/TestLibraryLoad/doc/Manifest.png?token=d7ef5b9a216641671ec7eeafb08ab8a9fd1ec4ad&quot; alt=&quot;Manifest&quot; /&gt;&lt;/p&gt;
+
+&lt;h3 id=&quot;linux-&quot;&gt;Linux 隐式链接动态库分目录&lt;/h3&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;Linux 下动态库查找规则&lt;/p&gt;
+
+  &lt;ol&gt;
+    &lt;li&gt;(ELF only) If the executable file for the calling program contains a DT_RPATH tag, and does not contain a DT_RUNPATH tag, then directories listed in the DT_RPATH tag are searched.&lt;/li&gt;
+    &lt;li&gt;If, at the time that the program was started, the environment variable LD_LIBRARY_PATH was defined to contain a colon-separated list of directories, then these are searched. (As a security measure this variable is ignored for set-user-ID and set-group-ID programs.)&lt;/li&gt;
+    &lt;li&gt;(ELF only) If the executable file for the calling program contains a DT_RUNPATH tag, then the directories listed in that tag are searched.&lt;/li&gt;
+    &lt;li&gt;The cache file /etc/ld.so.cache (maintained by ldconfig) is checked to see whether it contains an entry for filename.&lt;/li&gt;
+    &lt;li&gt;The directories /lib and /usr/lib are searched (in that order).&lt;/li&gt;
+  &lt;/ol&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;1 和 3 的 &lt;code&gt;DT_RPATH&lt;/code&gt; &lt;code&gt;DT_RUNPATH&lt;/code&gt; 都需要在链接时指定，不够灵活，暂不考虑。4 需要动态库支持 so-name，5 是固定目录，都不适用。2 说明在程序启动的时候会搜索 LD_LIBRARY_PATH 环境变量中的目录，是不是很眼熟，与 Windows 下搜索 PATH 环境变量类似。&lt;/p&gt;
+
+&lt;p&gt;不幸的是，在 Linux 系统下，程序在执行第一条指令之前，加载器会读取 LD_LIBRARY_PATH 环境变量，并且缓存起来，后面进程在搜索动态库的时候都是使用的这个保存起来的值。由于程序一启动这个值就会被缓存，导致我们完全没有机会进行修改，所以 Windows 下的修改环境变量的方法在 Linux 下不可用。现在需要解决的问题是：怎样在进程执行前设置好环境变量 LD_LIBRARY_PATH 的值，并且不影响系统中的其它进程？&lt;/p&gt;
+
+&lt;p&gt;我们知道，进程启动之前会缓存 LD_LIBRARY_PATH 环境变量，后续对该变量的修改不会影响到本进程，但是如果这时创建子进程的话，子进程会继承父进程的环境变量，也就继承了修改后的 LD_LIBRARY_PATH 环境变量，通过这种方式，子进程就能实现隐式链接动态库分目录了。&lt;/p&gt;
+
+&lt;p&gt;具体的实现方式有两种：1. 使用 shell 脚本包装可执行程序：在调用可执行程序之前，通过 export 设置本 shell 的 LD_LIBRARY_PATH 环境变量，chrome 浏览器使用这种方式。2. 使用父进程包装可执行程序：在父进程中通过 &lt;code&gt;getenv&lt;/code&gt; 和 &lt;code&gt;putenv&lt;/code&gt; 设置 LD_LIBRARY_PATH 环境变量，然后通过 execve 执行子进程，Java使用类似的方式 。两种方法都可以在进程执行前设置好 LD_LIBRARY_PATH 环境变量，实现隐式链接动态库分目录。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://bitbucket.org/touxienihao/test/src/1fa5f2e9a586d739bfe8b734aedef6a0f5acf155/TestLibraryLoad?at=develop&quot;&gt;TestLibraryLoad&lt;/a&gt; 中 Debug/libexe.sh 使用脚本方式包装，relibexe 使用父进程方式包装。&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;libexe.sh&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;pre&gt;&lt;code&gt;#!/bin/sh
+
+# libexe launcher
+
+RUNDIR=$(cd `dirname $0`; pwd)
+LIBDIR=$RUNDIR/comm
+
+if [ &quot;Z$LD_LIBRARY_PATH&quot; != Z ] ; then
+  LD_LIBRARY_PATH=$LIBDIR:$LD_LIBRARY_PATH
+else
+  LD_LIBRARY_PATH=$LIBDIR
+fi
+
+export LD_LIBRARY_PATH
+
+$RUNDIR/libexe
+
+exit 0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;relibexe.cpp&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-cpp&quot; data-lang=&quot;cpp&quot;&gt;&lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;string&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;strLDEnv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;kt&quot;&gt;char&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;pLDEnv&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;getenv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;LD_LIBRARY_PATH&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;pLDEnv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;strLDEnv&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;pLDEnv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;strLDEnv&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+=&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;:&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;strLDEnv&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;GetRunPath&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;();&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;strLDEnv&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+=&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;comm&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;strLDEnv&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;LD_LIBRARY_PATH=&quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;strLDEnv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;kt&quot;&gt;char&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;pData&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;char&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;malloc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;strLDEnv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;size&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;strcpy&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;pData&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;strLDEnv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;c_str&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;());&lt;/span&gt; 
+    &lt;span class=&quot;n&quot;&gt;pData&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;strLDEnv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;size&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;putenv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;pData&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// std::cout &amp;lt;&amp;lt; pData &amp;lt;&amp;lt; std::endl;
+&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;string&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;strLibExe&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;GetRunPath&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;libexe&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;pid_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;pid&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fork&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;();&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;pid&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;execl&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;strLibExe&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;c_str&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(),&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;char&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+
+</description>
+        <pubDate>Wed, 07 Jan 2015 18:28:30 +0800</pubDate>
+        <link>http://yourdomain.com/client/2015/01/07/client-software-multi-directory.html</link>
+        <guid isPermaLink="true">http://yourdomain.com/client/2015/01/07/client-software-multi-directory.html</guid>
+        
+        
+        <category>client</category>
+        
+      </item>
+    
+      <item>
+        <title>Welcome to Jekyll!</title>
+        <description>&lt;p&gt;You’ll find this post in your &lt;code&gt;_posts&lt;/code&gt; directory. Go ahead and edit it and re-build the site to see your changes. You can rebuild the site in many different ways, but the most common way is to run &lt;code&gt;jekyll serve --watch&lt;/code&gt;, which launches a web server and auto-regenerates your site when a file is updated.&lt;/p&gt;
+
+&lt;p&gt;To add new posts, simply add a file in the &lt;code&gt;_posts&lt;/code&gt; directory that follows the convention &lt;code&gt;YYYY-MM-DD-name-of-post.ext&lt;/code&gt; and includes the necessary front matter. Take a look at the source for this post to get an idea about how it works.&lt;/p&gt;
+
+&lt;p&gt;Jekyll also offers powerful support for code snippets:&lt;/p&gt;
+
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;nb&quot;&gt;puts&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;Hi, &lt;/span&gt;&lt;span class=&quot;si&quot;&gt;#{&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;si&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&#39;Tom&#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;#=&amp;gt; prints &#39;Hi, Tom&#39; to STDOUT.&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Check out the &lt;a href=&quot;http://jekyllrb.com&quot;&gt;Jekyll docs&lt;/a&gt; for more info on how to get the most out of Jekyll. File all bugs/feature requests at &lt;a href=&quot;https://github.com/jekyll/jekyll&quot;&gt;Jekyll’s GitHub repo&lt;/a&gt;. If you have questions, you can ask them on &lt;a href=&quot;https://github.com/jekyll/jekyll-help&quot;&gt;Jekyll’s dedicated Help repository&lt;/a&gt;.&lt;/p&gt;
+
+</description>
+        <pubDate>Wed, 07 Jan 2015 17:05:35 +0800</pubDate>
+        <link>http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC.html</link>
+        <guid isPermaLink="true">http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC.html</guid>
+        
+        
+        <category>jekyll</category>
+        
+        <category>update</category>
+        
+      </item>
+    
+      <item>
+        <title>Welcome to Jekyll!</title>
+        <description>&lt;p&gt;You’ll find this post in your &lt;code&gt;_posts&lt;/code&gt; directory. Go ahead and edit it and re-build the site to see your changes. You can rebuild the site in many different ways, but the most common way is to run &lt;code&gt;jekyll serve --watch&lt;/code&gt;, which launches a web server and auto-regenerates your site when a file is updated.&lt;/p&gt;
+
+&lt;p&gt;To add new posts, simply add a file in the &lt;code&gt;_posts&lt;/code&gt; directory that follows the convention &lt;code&gt;YYYY-MM-DD-name-of-post.ext&lt;/code&gt; and includes the necessary front matter. Take a look at the source for this post to get an idea about how it works.&lt;/p&gt;
+
+&lt;p&gt;Jekyll also offers powerful support for code snippets:&lt;/p&gt;
+
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;nb&quot;&gt;puts&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;Hi, &lt;/span&gt;&lt;span class=&quot;si&quot;&gt;#{&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;si&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&#39;Tom&#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;#=&amp;gt; prints &#39;Hi, Tom&#39; to STDOUT.&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Check out the &lt;a href=&quot;http://jekyllrb.com&quot;&gt;Jekyll docs&lt;/a&gt; for more info on how to get the most out of Jekyll. File all bugs/feature requests at &lt;a href=&quot;https://github.com/jekyll/jekyll&quot;&gt;Jekyll’s GitHub repo&lt;/a&gt;. If you have questions, you can ask them on &lt;a href=&quot;https://github.com/jekyll/jekyll-help&quot;&gt;Jekyll’s dedicated Help repository&lt;/a&gt;.&lt;/p&gt;
+
+</description>
+        <pubDate>Wed, 07 Jan 2015 17:05:35 +0800</pubDate>
+        <link>http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20(2).html</link>
+        <guid isPermaLink="true">http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20(2).html</guid>
+        
+        
+        <category>jekyll</category>
+        
+        <category>update</category>
+        
+      </item>
+    
+      <item>
+        <title>Welcome to Jekyll!</title>
+        <description>&lt;p&gt;You’ll find this post in your &lt;code&gt;_posts&lt;/code&gt; directory. Go ahead and edit it and re-build the site to see your changes. You can rebuild the site in many different ways, but the most common way is to run &lt;code&gt;jekyll serve --watch&lt;/code&gt;, which launches a web server and auto-regenerates your site when a file is updated.&lt;/p&gt;
+
+&lt;p&gt;To add new posts, simply add a file in the &lt;code&gt;_posts&lt;/code&gt; directory that follows the convention &lt;code&gt;YYYY-MM-DD-name-of-post.ext&lt;/code&gt; and includes the necessary front matter. Take a look at the source for this post to get an idea about how it works.&lt;/p&gt;
+
+&lt;p&gt;Jekyll also offers powerful support for code snippets:&lt;/p&gt;
+
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;nb&quot;&gt;puts&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;Hi, &lt;/span&gt;&lt;span class=&quot;si&quot;&gt;#{&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;si&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&#39;Tom&#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;#=&amp;gt; prints &#39;Hi, Tom&#39; to STDOUT.&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Check out the &lt;a href=&quot;http://jekyllrb.com&quot;&gt;Jekyll docs&lt;/a&gt; for more info on how to get the most out of Jekyll. File all bugs/feature requests at &lt;a href=&quot;https://github.com/jekyll/jekyll&quot;&gt;Jekyll’s GitHub repo&lt;/a&gt;. If you have questions, you can ask them on &lt;a href=&quot;https://github.com/jekyll/jekyll-help&quot;&gt;Jekyll’s dedicated Help repository&lt;/a&gt;.&lt;/p&gt;
+
+</description>
+        <pubDate>Wed, 07 Jan 2015 17:05:35 +0800</pubDate>
+        <link>http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC.html</link>
+        <guid isPermaLink="true">http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC.html</guid>
+        
+        
+        <category>jekyll</category>
+        
+        <category>update</category>
+        
+      </item>
+    
+      <item>
+        <title>Welcome to Jekyll!</title>
+        <description>&lt;p&gt;You’ll find this post in your &lt;code&gt;_posts&lt;/code&gt; directory. Go ahead and edit it and re-build the site to see your changes. You can rebuild the site in many different ways, but the most common way is to run &lt;code&gt;jekyll serve --watch&lt;/code&gt;, which launches a web server and auto-regenerates your site when a file is updated.&lt;/p&gt;
+
+&lt;p&gt;To add new posts, simply add a file in the &lt;code&gt;_posts&lt;/code&gt; directory that follows the convention &lt;code&gt;YYYY-MM-DD-name-of-post.ext&lt;/code&gt; and includes the necessary front matter. Take a look at the source for this post to get an idea about how it works.&lt;/p&gt;
+
+&lt;p&gt;Jekyll also offers powerful support for code snippets:&lt;/p&gt;
+
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;nb&quot;&gt;puts&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;Hi, &lt;/span&gt;&lt;span class=&quot;si&quot;&gt;#{&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;si&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&#39;Tom&#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;#=&amp;gt; prints &#39;Hi, Tom&#39; to STDOUT.&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Check out the &lt;a href=&quot;http://jekyllrb.com&quot;&gt;Jekyll docs&lt;/a&gt; for more info on how to get the most out of Jekyll. File all bugs/feature requests at &lt;a href=&quot;https://github.com/jekyll/jekyll&quot;&gt;Jekyll’s GitHub repo&lt;/a&gt;. If you have questions, you can ask them on &lt;a href=&quot;https://github.com/jekyll/jekyll-help&quot;&gt;Jekyll’s dedicated Help repository&lt;/a&gt;.&lt;/p&gt;
+
+</description>
+        <pubDate>Wed, 07 Jan 2015 17:05:35 +0800</pubDate>
+        <link>http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20(3).html</link>
+        <guid isPermaLink="true">http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20(3).html</guid>
+        
+        
+        <category>jekyll</category>
+        
+        <category>update</category>
+        
+      </item>
+    
+      <item>
+        <title>Welcome to Jekyll!</title>
+        <description>&lt;p&gt;You’ll find this post in your &lt;code&gt;_posts&lt;/code&gt; directory. Go ahead and edit it and re-build the site to see your changes. You can rebuild the site in many different ways, but the most common way is to run &lt;code&gt;jekyll serve --watch&lt;/code&gt;, which launches a web server and auto-regenerates your site when a file is updated.&lt;/p&gt;
+
+&lt;p&gt;To add new posts, simply add a file in the &lt;code&gt;_posts&lt;/code&gt; directory that follows the convention &lt;code&gt;YYYY-MM-DD-name-of-post.ext&lt;/code&gt; and includes the necessary front matter. Take a look at the source for this post to get an idea about how it works.&lt;/p&gt;
+
+&lt;p&gt;Jekyll also offers powerful support for code snippets:&lt;/p&gt;
+
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;nb&quot;&gt;puts&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;Hi, &lt;/span&gt;&lt;span class=&quot;si&quot;&gt;#{&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;si&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&#39;Tom&#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;#=&amp;gt; prints &#39;Hi, Tom&#39; to STDOUT.&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Check out the &lt;a href=&quot;http://jekyllrb.com&quot;&gt;Jekyll docs&lt;/a&gt; for more info on how to get the most out of Jekyll. File all bugs/feature requests at &lt;a href=&quot;https://github.com/jekyll/jekyll&quot;&gt;Jekyll’s GitHub repo&lt;/a&gt;. If you have questions, you can ask them on &lt;a href=&quot;https://github.com/jekyll/jekyll-help&quot;&gt;Jekyll’s dedicated Help repository&lt;/a&gt;.&lt;/p&gt;
+
+</description>
+        <pubDate>Wed, 07 Jan 2015 17:05:35 +0800</pubDate>
+        <link>http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20(2)%20-%20%E5%89%AF%E6%9C%AC.html</link>
+        <guid isPermaLink="true">http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20(2)%20-%20%E5%89%AF%E6%9C%AC.html</guid>
+        
+        
+        <category>jekyll</category>
+        
+        <category>update</category>
+        
+      </item>
+    
+      <item>
+        <title>Welcome to Jekyll!</title>
+        <description>&lt;p&gt;You’ll find this post in your &lt;code&gt;_posts&lt;/code&gt; directory. Go ahead and edit it and re-build the site to see your changes. You can rebuild the site in many different ways, but the most common way is to run &lt;code&gt;jekyll serve --watch&lt;/code&gt;, which launches a web server and auto-regenerates your site when a file is updated.&lt;/p&gt;
+
+&lt;p&gt;To add new posts, simply add a file in the &lt;code&gt;_posts&lt;/code&gt; directory that follows the convention &lt;code&gt;YYYY-MM-DD-name-of-post.ext&lt;/code&gt; and includes the necessary front matter. Take a look at the source for this post to get an idea about how it works.&lt;/p&gt;
+
+&lt;p&gt;Jekyll also offers powerful support for code snippets:&lt;/p&gt;
+
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;nb&quot;&gt;puts&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;Hi, &lt;/span&gt;&lt;span class=&quot;si&quot;&gt;#{&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;si&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&#39;Tom&#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;#=&amp;gt; prints &#39;Hi, Tom&#39; to STDOUT.&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Check out the &lt;a href=&quot;http://jekyllrb.com&quot;&gt;Jekyll docs&lt;/a&gt; for more info on how to get the most out of Jekyll. File all bugs/feature requests at &lt;a href=&quot;https://github.com/jekyll/jekyll&quot;&gt;Jekyll’s GitHub repo&lt;/a&gt;. If you have questions, you can ask them on &lt;a href=&quot;https://github.com/jekyll/jekyll-help&quot;&gt;Jekyll’s dedicated Help repository&lt;/a&gt;.&lt;/p&gt;
+
+</description>
+        <pubDate>Wed, 07 Jan 2015 17:05:35 +0800</pubDate>
+        <link>http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20(2).html</link>
+        <guid isPermaLink="true">http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20(2).html</guid>
+        
+        
+        <category>jekyll</category>
+        
+        <category>update</category>
+        
+      </item>
+    
+      <item>
+        <title>Welcome to Jekyll!</title>
+        <description>&lt;p&gt;You’ll find this post in your &lt;code&gt;_posts&lt;/code&gt; directory. Go ahead and edit it and re-build the site to see your changes. You can rebuild the site in many different ways, but the most common way is to run &lt;code&gt;jekyll serve --watch&lt;/code&gt;, which launches a web server and auto-regenerates your site when a file is updated.&lt;/p&gt;
+
+&lt;p&gt;To add new posts, simply add a file in the &lt;code&gt;_posts&lt;/code&gt; directory that follows the convention &lt;code&gt;YYYY-MM-DD-name-of-post.ext&lt;/code&gt; and includes the necessary front matter. Take a look at the source for this post to get an idea about how it works.&lt;/p&gt;
+
+&lt;p&gt;Jekyll also offers powerful support for code snippets:&lt;/p&gt;
+
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;nb&quot;&gt;puts&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;Hi, &lt;/span&gt;&lt;span class=&quot;si&quot;&gt;#{&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;si&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&#39;Tom&#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;#=&amp;gt; prints &#39;Hi, Tom&#39; to STDOUT.&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Check out the &lt;a href=&quot;http://jekyllrb.com&quot;&gt;Jekyll docs&lt;/a&gt; for more info on how to get the most out of Jekyll. File all bugs/feature requests at &lt;a href=&quot;https://github.com/jekyll/jekyll&quot;&gt;Jekyll’s GitHub repo&lt;/a&gt;. If you have questions, you can ask them on &lt;a href=&quot;https://github.com/jekyll/jekyll-help&quot;&gt;Jekyll’s dedicated Help repository&lt;/a&gt;.&lt;/p&gt;
+
+</description>
+        <pubDate>Wed, 07 Jan 2015 17:05:35 +0800</pubDate>
+        <link>http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC.html</link>
+        <guid isPermaLink="true">http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC.html</guid>
+        
+        
+        <category>jekyll</category>
+        
+        <category>update</category>
+        
+      </item>
+    
+      <item>
+        <title>Welcome to Jekyll!</title>
+        <description>&lt;p&gt;You’ll find this post in your &lt;code&gt;_posts&lt;/code&gt; directory. Go ahead and edit it and re-build the site to see your changes. You can rebuild the site in many different ways, but the most common way is to run &lt;code&gt;jekyll serve --watch&lt;/code&gt;, which launches a web server and auto-regenerates your site when a file is updated.&lt;/p&gt;
+
+&lt;p&gt;To add new posts, simply add a file in the &lt;code&gt;_posts&lt;/code&gt; directory that follows the convention &lt;code&gt;YYYY-MM-DD-name-of-post.ext&lt;/code&gt; and includes the necessary front matter. Take a look at the source for this post to get an idea about how it works.&lt;/p&gt;
+
+&lt;p&gt;Jekyll also offers powerful support for code snippets:&lt;/p&gt;
+
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;nb&quot;&gt;puts&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;Hi, &lt;/span&gt;&lt;span class=&quot;si&quot;&gt;#{&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;si&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&#39;Tom&#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;#=&amp;gt; prints &#39;Hi, Tom&#39; to STDOUT.&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Check out the &lt;a href=&quot;http://jekyllrb.com&quot;&gt;Jekyll docs&lt;/a&gt; for more info on how to get the most out of Jekyll. File all bugs/feature requests at &lt;a href=&quot;https://github.com/jekyll/jekyll&quot;&gt;Jekyll’s GitHub repo&lt;/a&gt;. If you have questions, you can ask them on &lt;a href=&quot;https://github.com/jekyll/jekyll-help&quot;&gt;Jekyll’s dedicated Help repository&lt;/a&gt;.&lt;/p&gt;
+
+</description>
+        <pubDate>Wed, 07 Jan 2015 17:05:35 +0800</pubDate>
+        <link>http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20(3).html</link>
+        <guid isPermaLink="true">http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20(3).html</guid>
+        
+        
+        <category>jekyll</category>
+        
+        <category>update</category>
+        
+      </item>
+    
+      <item>
+        <title>Welcome to Jekyll!</title>
+        <description>&lt;p&gt;You’ll find this post in your &lt;code&gt;_posts&lt;/code&gt; directory. Go ahead and edit it and re-build the site to see your changes. You can rebuild the site in many different ways, but the most common way is to run &lt;code&gt;jekyll serve --watch&lt;/code&gt;, which launches a web server and auto-regenerates your site when a file is updated.&lt;/p&gt;
+
+&lt;p&gt;To add new posts, simply add a file in the &lt;code&gt;_posts&lt;/code&gt; directory that follows the convention &lt;code&gt;YYYY-MM-DD-name-of-post.ext&lt;/code&gt; and includes the necessary front matter. Take a look at the source for this post to get an idea about how it works.&lt;/p&gt;
+
+&lt;p&gt;Jekyll also offers powerful support for code snippets:&lt;/p&gt;
+
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;nb&quot;&gt;puts&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;Hi, &lt;/span&gt;&lt;span class=&quot;si&quot;&gt;#{&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;name&lt;/span&gt;&lt;span class=&quot;si&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;print_hi&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;&#39;Tom&#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;#=&amp;gt; prints &#39;Hi, Tom&#39; to STDOUT.&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;Check out the &lt;a href=&quot;http://jekyllrb.com&quot;&gt;Jekyll docs&lt;/a&gt; for more info on how to get the most out of Jekyll. File all bugs/feature requests at &lt;a href=&quot;https://github.com/jekyll/jekyll&quot;&gt;Jekyll’s GitHub repo&lt;/a&gt;. If you have questions, you can ask them on &lt;a href=&quot;https://github.com/jekyll/jekyll-help&quot;&gt;Jekyll’s dedicated Help repository&lt;/a&gt;.&lt;/p&gt;
+
+</description>
+        <pubDate>Wed, 07 Jan 2015 17:05:35 +0800</pubDate>
+        <link>http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20(2)%20-%20%E5%89%AF%E6%9C%AC.html</link>
+        <guid isPermaLink="true">http://yourdomain.com/jekyll/update/2015/01/07/welcome-to-jekyll%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC%20(2)%20-%20%E5%89%AF%E6%9C%AC.html</guid>
+        
+        
+        <category>jekyll</category>
+        
+        <category>update</category>
+        
+      </item>
+    
+  </channel>
+</rss>
