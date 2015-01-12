@@ -6,8 +6,8 @@
 </description>
     <link>/</link>
     <atom:link href="/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Fri, 09 Jan 2015 21:14:26 +0800</pubDate>
-    <lastBuildDate>Fri, 09 Jan 2015 21:14:26 +0800</lastBuildDate>
+    <pubDate>Mon, 12 Jan 2015 11:23:48 +0800</pubDate>
+    <lastBuildDate>Mon, 12 Jan 2015 11:23:48 +0800</lastBuildDate>
     <generator>Jekyll v2.4.0</generator>
     
       <item>
@@ -16,7 +16,7 @@
 
 &lt;p&gt;一个复杂的客户端软件可能包含上百个不同功能的动态库，有些动态库需要配置文件，有些动态库会生成日志文件。如果将所有的动态库、配置文件和日志文件都放置到主程序目录下，文件太多就会显的杂乱无章，不易管理，文件名也容易冲突。自然想到的方案就是将产品按照逻辑功能划分到不同子目录下，每个子目录下是一个单独的子产品，从而实现产品程度上的模块化和解耦合，同时对开发、部署（安装、卸载和升级）和销售都会产生一定的便利。下图是我们当前客户端产品的目录结构，每个子产品都是一个单独的目录：&lt;/p&gt;
 
-&lt;p&gt;&lt;img src=&quot;https://bytebucket.org/touxienihao/test/raw/49837a8f547d54e5831dc43c4e43e467c9a357ff/TestLibraryLoad/doc/ESM.png?token=2e94251d2fefa79f6040c484a3499cb32219c92b&quot; alt=&quot;ESM DIRECTORY LAYOUT&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;/image/posts/client-software-multi-directory/ESM.png&quot; alt=&quot;ESM DIRECTORY LAYOUT&quot; /&gt;&lt;/p&gt;
 
 &lt;p&gt;要实现软件分目录，主要就是实现动态链接库的分目录。动态链接库有两种链接方式：显示链接和隐式链接。在不同的操作系统下，不同链接方式的实现各不相同，下面分别进行讨论，并给出相应的分目录解决方案。&lt;/p&gt;
 
@@ -45,7 +45,7 @@ int dlclose(void *handle);
 
 &lt;p&gt;其中 &lt;code&gt;LoadLibrary&lt;/code&gt; 和 &lt;code&gt;dlopen&lt;/code&gt; 负责动态库的查找和加载，这两个函数的第一个参数 &lt;em&gt;lpFileName&lt;/em&gt; 和 &lt;em&gt;filename&lt;/em&gt; 都是用来指定动态链接库的路径的，并且都可以指定为绝对路径。所以显式链接动态库要实现分目录很容易，只要在加载动态库的时候传入动态库的绝对路径就行了。&lt;/p&gt;
 
-&lt;p&gt;&lt;a href=&quot;https://bitbucket.org/touxienihao/test/src/1fa5f2e9a586d739bfe8b734aedef6a0f5acf155/TestLibraryLoad?at=develop&quot;&gt;TestLibraryLoad&lt;/a&gt; 例子中，libmgr.dll 显式链接子目录 libs 下的 liba.dll 和 libb.dll， 使用绝对路径来实现分目录。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&quot;/downloads/TestLibraryLoad.zip&quot;&gt;TestLibraryLoad&lt;/a&gt; 例子中，libmgr.dll 显式链接子目录 libs 下的 liba.dll 和 libb.dll， 使用绝对路径来实现分目录。&lt;/p&gt;
 
 &lt;h2 id=&quot;section-2&quot;&gt;隐式链接动态库分目录&lt;/h2&gt;
 
@@ -91,7 +91,7 @@ BOOL SetEnvironmentVariable(LPCTSTR lpName, LPCTSTR lpValue);
 
 &lt;p&gt;另外，主进程启动的时候也会隐式链接一些 DLL，这个时候我们还没有机会修改进程的环境变量。如果想让这些 DLL 也分目录，可以将程序分成两部分：一部分是一个 exe 的壳程序，仅仅负责设置进程的 PATH 环境变量和显式加载主功能 DLL;另一部分是主功能 DLL，程序的主要功能都挪到这里，包含原先隐式链接的 DLL。通过这种方式，主功能 DLL 在加载隐式链接的 DLL 之前，exe 壳程序已经将分目录添加到 PATH 环境变量里面了，隐式链接就能成功，从而实现分目录了。&lt;/p&gt;
 
-&lt;p&gt;&lt;a href=&quot;https://bitbucket.org/touxienihao/test/src/1fa5f2e9a586d739bfe8b734aedef6a0f5acf155/TestLibraryLoad?at=develop&quot;&gt;TestLoadLibrary&lt;/a&gt; 例子中：libmgr.dll 负责将 comm 目录添加到进程 PATH 环境变量，并且使用绝对路径显式链接子目录 libs 下的 liba.dll 和 libb.dll。liba.dll 和 libb.dll 分别隐式链接 comm 目录下的 libc.dll，由于 libmgr.dll 已将 comm 目录添加到了进程 PATH 环境变量中，所以隐式链接 libc.dll 时也能成功。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&quot;/downloads/TestLibraryLoad.zip&quot;&gt;TestLoadLibrary&lt;/a&gt; 例子中：libmgr.dll 负责将 comm 目录添加到进程 PATH 环境变量，并且使用绝对路径显式链接子目录 libs 下的 liba.dll 和 libb.dll。liba.dll 和 libb.dll 分别隐式链接 comm 目录下的 libc.dll，由于 libmgr.dll 已将 comm 目录添加到了进程 PATH 环境变量中，所以隐式链接 libc.dll 时也能成功。&lt;/p&gt;
 
 &lt;p&gt;那到这里问题是否完全搞定了呢？ No, 真正的高潮才刚刚开始！&lt;/p&gt;
 
@@ -124,9 +124,9 @@ BOOL SetEnvironmentVariable(LPCTSTR lpName, LPCTSTR lpValue);
 
 &lt;p&gt;这样 exe 壳程序启动时，由于链接 VC 运行库时使用了版本冲突解决方案，所以会根据资源中的 Manifest 加载本目录下相应的 VC 运行库。其它 DLL 由于链接 VC 运行库时禁用了版本冲突解决方案，所以会使用传统的 DLL 查找方案，由于加载器会跟踪已加载的 DLL，这时发现 VC 运行库已经加载，就不会在磁盘中进行查找了，直接返回链接成功。&lt;/p&gt;
 
-&lt;p&gt;&lt;a href=&quot;https://bitbucket.org/touxienihao/test/src/1fa5f2e9a586d739bfe8b734aedef6a0f5acf155/TestLibraryLoad?at=develop&quot;&gt;TestLibraryLoad&lt;/a&gt; 例子中，libexe.exe 的链接属性 Generate Manifest 为 &lt;strong&gt;YES&lt;/strong&gt;，其它所有 DLL 的链接属性 Generate Manifest 为 &lt;strong&gt;NO&lt;/strong&gt;，VC 运行库与 libexe.exe 同目录。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&quot;/downloads/TestLibraryLoad.zip&quot;&gt;TestLibraryLoad&lt;/a&gt; 例子中，libexe.exe 的链接属性 Generate Manifest 为 &lt;strong&gt;YES&lt;/strong&gt;，其它所有 DLL 的链接属性 Generate Manifest 为 &lt;strong&gt;NO&lt;/strong&gt;，VC 运行库与 libexe.exe 同目录。&lt;/p&gt;
 
-&lt;p&gt;&lt;img src=&quot;https://bytebucket.org/touxienihao/test/raw/5583049a8251df3c89df795cc8f4d5722316f6f3/TestLibraryLoad/doc/Manifest.png?token=d7ef5b9a216641671ec7eeafb08ab8a9fd1ec4ad&quot; alt=&quot;Manifest&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;/image/posts/client-software-multi-directory/Manifest.png&quot; alt=&quot;Manifest&quot; /&gt;&lt;/p&gt;
 
 &lt;h3 id=&quot;linux-&quot;&gt;Linux 隐式链接动态库分目录&lt;/h3&gt;
 
@@ -150,7 +150,7 @@ BOOL SetEnvironmentVariable(LPCTSTR lpName, LPCTSTR lpValue);
 
 &lt;p&gt;具体的实现方式有两种：1. 使用 shell 脚本包装可执行程序：在调用可执行程序之前，通过 export 设置本 shell 的 LD_LIBRARY_PATH 环境变量，chrome 浏览器使用这种方式。2. 使用父进程包装可执行程序：在父进程中通过 &lt;code&gt;getenv&lt;/code&gt; 和 &lt;code&gt;putenv&lt;/code&gt; 设置 LD_LIBRARY_PATH 环境变量，然后通过 execve 执行子进程，Java使用类似的方式 。两种方法都可以在进程执行前设置好 LD_LIBRARY_PATH 环境变量，实现隐式链接动态库分目录。&lt;/p&gt;
 
-&lt;p&gt;&lt;a href=&quot;https://bitbucket.org/touxienihao/test/src/1fa5f2e9a586d739bfe8b734aedef6a0f5acf155/TestLibraryLoad?at=develop&quot;&gt;TestLibraryLoad&lt;/a&gt; 中 Debug/libexe.sh 使用脚本方式包装，relibexe 使用父进程方式包装。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&quot;/downloads/TestLibraryLoad.zip&quot;&gt;TestLibraryLoad&lt;/a&gt; 中 Debug/libexe.sh 使用脚本方式包装，relibexe 使用父进程方式包装。&lt;/p&gt;
 
 &lt;blockquote&gt;
   &lt;p&gt;libexe.sh&lt;/p&gt;
