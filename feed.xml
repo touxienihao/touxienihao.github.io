@@ -4,11 +4,50 @@
     <title>研究课题</title>
     <description>© 2015 zhangjia. All rights reserved.
 </description>
-    <link>/</link>
-    <atom:link href="/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Mon, 12 Jan 2015 11:23:48 +0800</pubDate>
-    <lastBuildDate>Mon, 12 Jan 2015 11:23:48 +0800</lastBuildDate>
+    <link>http://localhost:4000/</link>
+    <atom:link href="http://localhost:4000/feed.xml" rel="self" type="application/rss+xml" />
+    <pubDate>Mon, 12 Jan 2015 14:51:22 +0800</pubDate>
+    <lastBuildDate>Mon, 12 Jan 2015 14:51:22 +0800</lastBuildDate>
     <generator>Jekyll v2.4.0</generator>
+    
+      <item>
+        <title>国际化</title>
+        <description>&lt;p&gt;C++ 提供 &lt;code&gt;char&lt;/code&gt; 和 &lt;code&gt;wchar_t&lt;/code&gt; 两个关键字来表示字符和字符串。每个 &lt;code&gt;char&lt;/code&gt; 占用一个字节，可以使用多个字节进行编码，
+在中文 Windows 下默认使用 GB2312 编码，在繁体中文 Windows 下默认使用 BIG
+5 编码…；而在 Linux 下默认使用 UTF8 格式编码。
+&lt;code&gt;wchar_t&lt;/code&gt; 在 Windows 下占用两个字节，使用 UTF16(UCS2) 编码，而在 Linux 下占用四个字节，使用 UTF32(UCS4)编码。&lt;/p&gt;
+
+&lt;p&gt;我们在源代码（*.cpp) 中定义下面的字符串：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const char* pData1 = &quot;中文ABC&quot;;
+const wchar* pData2 = L&quot;中文ABC&quot;;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;总结上述代码在不同编码方式的源代码文件中、生成的可执行程序中和进程运行内存中的16进制表示如下：
+&lt;img src=&quot;https://bytebucket.org/touxienihao/document/raw/851bd7764d8acc35932eadfb3ba93899bfd2c0bd/i18n/VS2008%E7%BC%96%E7%A0%81%E8%BD%AC%E6%8D%A2.png?token=5854ab22997b53a6a74b2194c94b5458b10c932a&quot; alt=&quot;VS2008编码转换&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;总结：&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;ol&gt;
+    &lt;li&gt;可执行程序和相应运行时进程内存编码方式完全相同。&lt;/li&gt;
+    &lt;li&gt;源代码文件编码方式为 GB2312 或者 UTF8-BOM 或者 UTF16 时，在生成的可执行程序中，&lt;code&gt;char&lt;/code&gt; 类型的字符串都会被转换为 GB2312 编码，&lt;code&gt;wchar_t&lt;/code&gt; 类型的字符串被转换为 UTF16 编码。&lt;/li&gt;
+    &lt;li&gt;源代码文件编码方式为 UTF8-NO-BOM 时，由于没有 BOM 头，编译器分辨不出是 GB2312 编码还是 UTF8 编码，只能假设源代码文件是 GB2312 编码，结果导致在生成的可执行文件时，
+&lt;code&gt;char&lt;/code&gt; 类型的字符串被误认为是 GB2312 编码而没有进行编码转换,&lt;code&gt;wchar_t&lt;/code&gt; 类型的字符串被误认为是 GB2312 编码转换为 UTF16，导致输出全部乱码&lt;/li&gt;
+    &lt;li&gt;由于 Linux 下 &lt;code&gt;char&lt;/code&gt; 在源代码文件和生成的可执行程序中都是使用 UTF8 格式编码，所以&lt;code&gt;char&lt;/code&gt; 类型的字符串不需要进行编码转换；&lt;code&gt;wchar_t&lt;/code&gt;类型的字符串都会转换为 UTF32 编码。&lt;/li&gt;
+    &lt;li&gt;为了编写跨平台 (Window/Linux) 的代码，源文件的编码方式最好使用 UTF8-BOM 格式进行编码，这样就不会导致乱码了。&lt;/li&gt;
+  &lt;/ol&gt;
+&lt;/blockquote&gt;
+
+</description>
+        <pubDate>Sat, 31 Jan 2015 00:00:00 +0800</pubDate>
+        <link>http://localhost:4000/client/2015/01/31/i18n.html</link>
+        <guid isPermaLink="true">http://localhost:4000/client/2015/01/31/i18n.html</guid>
+        
+        
+        <category>client</category>
+        
+      </item>
     
       <item>
         <title>客户端软件多目录</title>
@@ -45,7 +84,7 @@ int dlclose(void *handle);
 
 &lt;p&gt;其中 &lt;code&gt;LoadLibrary&lt;/code&gt; 和 &lt;code&gt;dlopen&lt;/code&gt; 负责动态库的查找和加载，这两个函数的第一个参数 &lt;em&gt;lpFileName&lt;/em&gt; 和 &lt;em&gt;filename&lt;/em&gt; 都是用来指定动态链接库的路径的，并且都可以指定为绝对路径。所以显式链接动态库要实现分目录很容易，只要在加载动态库的时候传入动态库的绝对路径就行了。&lt;/p&gt;
 
-&lt;p&gt;&lt;a href=&quot;/downloads/TestLibraryLoad.zip&quot;&gt;TestLibraryLoad&lt;/a&gt; 例子中，libmgr.dll 显式链接子目录 libs 下的 liba.dll 和 libb.dll， 使用绝对路径来实现分目录。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&quot;http://localhost:4000/downloads/TestLibraryLoad.zip&quot;&gt;TestLibraryLoad&lt;/a&gt; 例子中，libmgr.dll 显式链接子目录 libs 下的 liba.dll 和 libb.dll， 使用绝对路径来实现分目录。&lt;/p&gt;
 
 &lt;h2 id=&quot;section-2&quot;&gt;隐式链接动态库分目录&lt;/h2&gt;
 
@@ -91,7 +130,7 @@ BOOL SetEnvironmentVariable(LPCTSTR lpName, LPCTSTR lpValue);
 
 &lt;p&gt;另外，主进程启动的时候也会隐式链接一些 DLL，这个时候我们还没有机会修改进程的环境变量。如果想让这些 DLL 也分目录，可以将程序分成两部分：一部分是一个 exe 的壳程序，仅仅负责设置进程的 PATH 环境变量和显式加载主功能 DLL;另一部分是主功能 DLL，程序的主要功能都挪到这里，包含原先隐式链接的 DLL。通过这种方式，主功能 DLL 在加载隐式链接的 DLL 之前，exe 壳程序已经将分目录添加到 PATH 环境变量里面了，隐式链接就能成功，从而实现分目录了。&lt;/p&gt;
 
-&lt;p&gt;&lt;a href=&quot;/downloads/TestLibraryLoad.zip&quot;&gt;TestLoadLibrary&lt;/a&gt; 例子中：libmgr.dll 负责将 comm 目录添加到进程 PATH 环境变量，并且使用绝对路径显式链接子目录 libs 下的 liba.dll 和 libb.dll。liba.dll 和 libb.dll 分别隐式链接 comm 目录下的 libc.dll，由于 libmgr.dll 已将 comm 目录添加到了进程 PATH 环境变量中，所以隐式链接 libc.dll 时也能成功。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&quot;http://localhost:4000/downloads/TestLibraryLoad.zip&quot;&gt;TestLoadLibrary&lt;/a&gt; 例子中：libmgr.dll 负责将 comm 目录添加到进程 PATH 环境变量，并且使用绝对路径显式链接子目录 libs 下的 liba.dll 和 libb.dll。liba.dll 和 libb.dll 分别隐式链接 comm 目录下的 libc.dll，由于 libmgr.dll 已将 comm 目录添加到了进程 PATH 环境变量中，所以隐式链接 libc.dll 时也能成功。&lt;/p&gt;
 
 &lt;p&gt;那到这里问题是否完全搞定了呢？ No, 真正的高潮才刚刚开始！&lt;/p&gt;
 
@@ -124,7 +163,7 @@ BOOL SetEnvironmentVariable(LPCTSTR lpName, LPCTSTR lpValue);
 
 &lt;p&gt;这样 exe 壳程序启动时，由于链接 VC 运行库时使用了版本冲突解决方案，所以会根据资源中的 Manifest 加载本目录下相应的 VC 运行库。其它 DLL 由于链接 VC 运行库时禁用了版本冲突解决方案，所以会使用传统的 DLL 查找方案，由于加载器会跟踪已加载的 DLL，这时发现 VC 运行库已经加载，就不会在磁盘中进行查找了，直接返回链接成功。&lt;/p&gt;
 
-&lt;p&gt;&lt;a href=&quot;/downloads/TestLibraryLoad.zip&quot;&gt;TestLibraryLoad&lt;/a&gt; 例子中，libexe.exe 的链接属性 Generate Manifest 为 &lt;strong&gt;YES&lt;/strong&gt;，其它所有 DLL 的链接属性 Generate Manifest 为 &lt;strong&gt;NO&lt;/strong&gt;，VC 运行库与 libexe.exe 同目录。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&quot;http://localhost:4000/downloads/TestLibraryLoad.zip&quot;&gt;TestLibraryLoad&lt;/a&gt; 例子中，libexe.exe 的链接属性 Generate Manifest 为 &lt;strong&gt;YES&lt;/strong&gt;，其它所有 DLL 的链接属性 Generate Manifest 为 &lt;strong&gt;NO&lt;/strong&gt;，VC 运行库与 libexe.exe 同目录。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&quot;/image/posts/client-software-multi-directory/Manifest.png&quot; alt=&quot;Manifest&quot; /&gt;&lt;/p&gt;
 
@@ -150,7 +189,7 @@ BOOL SetEnvironmentVariable(LPCTSTR lpName, LPCTSTR lpValue);
 
 &lt;p&gt;具体的实现方式有两种：1. 使用 shell 脚本包装可执行程序：在调用可执行程序之前，通过 export 设置本 shell 的 LD_LIBRARY_PATH 环境变量，chrome 浏览器使用这种方式。2. 使用父进程包装可执行程序：在父进程中通过 &lt;code&gt;getenv&lt;/code&gt; 和 &lt;code&gt;putenv&lt;/code&gt; 设置 LD_LIBRARY_PATH 环境变量，然后通过 execve 执行子进程，Java使用类似的方式 。两种方法都可以在进程执行前设置好 LD_LIBRARY_PATH 环境变量，实现隐式链接动态库分目录。&lt;/p&gt;
 
-&lt;p&gt;&lt;a href=&quot;/downloads/TestLibraryLoad.zip&quot;&gt;TestLibraryLoad&lt;/a&gt; 中 Debug/libexe.sh 使用脚本方式包装，relibexe 使用父进程方式包装。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&quot;http://localhost:4000/downloads/TestLibraryLoad.zip&quot;&gt;TestLibraryLoad&lt;/a&gt; 中 Debug/libexe.sh 使用脚本方式包装，relibexe 使用父进程方式包装。&lt;/p&gt;
 
 &lt;blockquote&gt;
   &lt;p&gt;libexe.sh&lt;/p&gt;
@@ -202,8 +241,8 @@ BOOL SetEnvironmentVariable(LPCTSTR lpName, LPCTSTR lpValue);
 
 </description>
         <pubDate>Wed, 07 Jan 2015 00:00:00 +0800</pubDate>
-        <link>/client/2015/01/07/client-software-multi-directory.html</link>
-        <guid isPermaLink="true">/client/2015/01/07/client-software-multi-directory.html</guid>
+        <link>http://localhost:4000/client/2015/01/07/client-software-multi-directory.html</link>
+        <guid isPermaLink="true">http://localhost:4000/client/2015/01/07/client-software-multi-directory.html</guid>
         
         
         <category>client</category>
